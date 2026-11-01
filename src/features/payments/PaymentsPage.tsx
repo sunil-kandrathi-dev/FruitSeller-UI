@@ -1,46 +1,9 @@
 import { useState } from 'react'
 import RecordPaymentForm from './RecordPaymentForm'
-
-// Define the structure of a payment
-type Payment = {
-  id: number
-  customer: string
-  date: string
-  method: 'Cash' | 'UPI'
-  amount: number
-}
-
-// Sample payment history
-const initialPayments: Payment[] = [
-  {
-    id: 1,
-    customer: 'Sri Lakshmi Fruits',
-    date: '2026-10-24',
-    method: 'Cash',
-    amount: 2000,
-  },
-  {
-    id: 2,
-    customer: 'Fresh Fruit Centre',
-    date: '2026-10-24',
-    method: 'UPI',
-    amount: 3000,
-  },
-  {
-    id: 3,
-    customer: 'Sai Fruit Shop',
-    date: '2026-10-23',
-    method: 'Cash',
-    amount: 1500,
-  },
-]
-
-// Sample outstanding balances
-const initialBalances: Record<string, number> = {
-  'Sri Lakshmi Fruits': 8500,
-  'Fresh Fruit Centre': 4200,
-  'Sai Fruit Shop': 0,
-}
+import { paymentsApi } from './api/paymentsApi'
+import { shopsApi } from '../customers/api/shopsApi'
+import { useApiCollection } from '../../data/hooks/useApiCollection'
+import ApiStatus from '../../components/ApiStatus'
 
 // Format amounts as Indian currency
 const formatCurrency = (amount: number) =>
@@ -62,8 +25,10 @@ const getToday = () => {
 }
 
 // Display dates in a readable format
-const formatDate = (date: string) => {
-  const [year, month, day] = date.split('-').map(Number)
+const formatDate = (date: unknown) => {
+  if (typeof date !== 'string' || date.length < 10) return '—'
+  const [year, month, day] = date.slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) return '—'
 
   return new Date(year, month - 1, day).toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -75,9 +40,13 @@ const formatDate = (date: string) => {
 const PAGE_SIZE = 5
 
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<Payment[]>(initialPayments)
-  const [balances, setBalances] =
-    useState<Record<string, number>>(initialBalances)
+  const { records: payments, loading: paymentsLoading, error: paymentsError, reload: reloadPayments, create } = useApiCollection(paymentsApi)
+  const { records: shops, setRecords: setShops, loading: shopsLoading, error: shopsError, reload: reloadShops } = useApiCollection(shopsApi)
+  const balances = shops.reduce<Record<string, number>>((result, shop) => {
+    if (shop.balance !== null) result[shop.name] = shop.balance
+    return result
+  }, {})
+  const hasUnknownBalances = shops.some((shop) => shop.balance === null)
 
   const [isPaymentFormOpen, setIsPaymentFormOpen] = useState(false)
 
@@ -91,7 +60,7 @@ export default function PaymentsPage() {
   const today = getToday()
 
   const receivedToday = payments
-    .filter((payment) => payment.date === today)
+    .filter((payment) => typeof payment.date === 'string' && payment.date.slice(0, 10) === today)
     .reduce((total, payment) => total + payment.amount, 0)
 
   // Calculate the total outstanding amount
@@ -113,7 +82,7 @@ export default function PaymentsPage() {
       methodFilter === 'All' || payment.method === methodFilter
 
     const matchesDate =
-      dateFilter === '' || payment.date === dateFilter
+      dateFilter === '' || (typeof payment.date === 'string' && payment.date.slice(0, 10) === dateFilter)
 
     return matchesCustomer && matchesMethod && matchesDate
   })
@@ -122,7 +91,7 @@ export default function PaymentsPage() {
   const visiblePayments = filteredPayments.slice(0, visibleCount)
 
   // Record a payment and update the customer's balance
-  const handleRecordPayment = (payment: {
+  const handleRecordPayment = async (payment: {
     customer: string
     amount: number
     method: 'Cash' | 'UPI'
@@ -139,24 +108,17 @@ export default function PaymentsPage() {
       return
     }
 
-    const newPayment: Payment = {
-      id: Date.now(),
-      customer: payment.customer,
-      date: getToday(),
-      method: payment.method,
-      amount: payment.amount,
+    try {
+      await create({ ...payment, date: getToday() })
+    } catch {
+      return
     }
 
-    setPayments((currentPayments) => [
-      newPayment,
-      ...currentPayments,
-    ])
-
-    setBalances((currentBalances) => ({
-      ...currentBalances,
-      [payment.customer]:
-        currentBalances[payment.customer] - payment.amount,
-    }))
+    setShops((currentShops) => currentShops.map((shop) =>
+      shop.name === payment.customer && shop.balance !== null
+        ? { ...shop, balance: shop.balance - payment.amount }
+        : shop,
+    ))
 
     setVisibleCount((count) => Math.max(count, PAGE_SIZE))
     setIsPaymentFormOpen(false)
@@ -198,6 +160,15 @@ export default function PaymentsPage() {
         </button>
       </div>
 
+      <ApiStatus
+        loading={paymentsLoading || shopsLoading}
+        error={paymentsError || shopsError}
+        onRetry={() => {
+          void reloadPayments()
+          void reloadShops()
+        }}
+      />
+
       {/* Summary cards */}
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         <div className="rounded-3xl border border-green-100 bg-green-50 p-6">
@@ -220,7 +191,7 @@ export default function PaymentsPage() {
           </p>
 
           <p className="mt-3 text-3xl font-bold text-amber-900">
-            {formatCurrency(pendingAmount)}
+            {hasUnknownBalances ? '—' : formatCurrency(pendingAmount)}
           </p>
 
           <p className="mt-3 text-amber-700">
@@ -382,9 +353,7 @@ export default function PaymentsPage() {
         {/* Temporary data notice */}
         <div className="border-t border-gray-100 bg-gray-50 px-6 py-4">
           <p className="text-sm text-gray-500">
-            Sample data is stored temporarily and resets when the page
-            is refreshed. Permanent storage will be added during backend
-            integration.
+            Payment history and customer balances are loaded from the server.
           </p>
         </div>
       </div>
@@ -402,6 +371,7 @@ export default function PaymentsPage() {
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
             onClick={(event) => event.stopPropagation()}
           >
+            {(paymentsError || shopsError) && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{paymentsError || shopsError}</p>}
             <RecordPaymentForm
               balances={balances}
               onCancel={() => setIsPaymentFormOpen(false)}

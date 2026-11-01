@@ -1,48 +1,17 @@
 
 import { useState } from 'react'
 import AddSaleForm from './AddSaleForm'
-
-// Step 1: Define the structure of a sale record
-type Sale = {
-  shop: string
-  fruit: string
-  boxes: number
-  price: number
-  total: number
-  date: string
-}
-
-// Step 2: Keep the existing sample sales
-const initialSales: Sale[] = [
-  {
-    shop: 'Sri Lakshmi Fruits',
-    fruit: 'Pomegranate',
-    boxes: 5,
-    price: 600,
-    total: 3000,
-    date: '24 Oct 2026',
-  },
-  {
-    shop: 'Fresh Fruit Centre',
-    fruit: 'Green grapes',
-    boxes: 4,
-    price: 500,
-    total: 2000,
-    date: '24 Oct 2026',
-  },
-  {
-    shop: 'Sai Fruit Shop',
-    fruit: 'Apple',
-    boxes: 3,
-    price: 700,
-    total: 2100,
-    date: '23 Oct 2026',
-  },
-]
+import { salesApi } from './api/salesApi'
+import type { SaleCreate } from './api/types'
+import { useApiCollection } from '../../data/hooks/useApiCollection'
+import ApiStatus from '../../components/ApiStatus'
+import { formatNumber } from '../../data/formatNumber'
 
 // Step 3: Convert a date to a readable format
-const formatDate = (date: string) => {
-  const [year, month, day] = date.split('-')
+const formatDate = (date: unknown) => {
+  if (typeof date !== 'string' || date.length < 10) return '—'
+  const [year, month, day] = date.slice(0, 10).split('-')
+  if (!year || !month || !day) return '—'
 
   return `${day} ${new Date(
     Number(year),
@@ -52,17 +21,16 @@ const formatDate = (date: string) => {
 
 // Step 4: Daily Sales page
 export default function DailySalesPage() {
-  // Store sales so new records appear immediately
-  const [sales, setSales] = useState<Sale[]>(initialSales)
+  const { records: sales, loading, error, reload, create } = useApiCollection(salesApi)
 
   // Control whether the Record Sale popup is visible
   const [isFormOpen, setIsFormOpen] = useState(false)
 
   // Get today's date in the same format used by the sale records
-  const today = formatDate(new Date().toLocaleDateString('en-CA'))
+  const today = new Date().toLocaleDateString('en-CA')
 
   // Find today's sales
-  const todaysSales = sales.filter((sale) => sale.date === today)
+  const todaysSales = sales.filter((sale) => typeof sale.date === 'string' && sale.date.slice(0, 10) === today)
 
   // Calculate today's sales amount
   const salesToday = todaysSales.reduce(
@@ -77,21 +45,12 @@ export default function DailySalesPage() {
   )
 
   // Add a new sale to the delivery history
-  const handleAddSale = (newSale: {
-    shop: string
-    fruit: string
-    boxes: number
-    price: number
-    total: number
-    date: string
-  }) => {
-    const sale: Sale = {
-      ...newSale,
-      date: formatDate(newSale.date),
+  const handleAddSale = async (newSale: SaleCreate) => {
+    try {
+      await create(newSale)
+    } catch {
+      return
     }
-
-    // Add the newest delivery to the top of the table
-    setSales((currentSales) => [sale, ...currentSales])
 
     // Close the popup after saving
     setIsFormOpen(false)
@@ -112,12 +71,14 @@ export default function DailySalesPage() {
         </p>
       </section>
 
+      <ApiStatus loading={loading} error={error} onRetry={() => void reload()} />
+
       {/* Step 6: Dynamic summary cards */}
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-[#E4E8DD] bg-white p-5">
           <p className="text-sm text-[#758276]">Sales today</p>
           <p className="mt-3 text-3xl font-bold text-[#173D2B]">
-            ₹{salesToday.toLocaleString('en-IN')}
+            ₹{formatNumber(salesToday)}
           </p>
           <p className="mt-2 text-xs text-[#899388]">
             Total value of today's deliveries
@@ -169,9 +130,9 @@ export default function DailySalesPage() {
             </thead>
 
             <tbody className="divide-y divide-[#EDF0E9]">
-              {sales.map((sale, index) => (
+              {sales.map((sale) => (
                 <tr
-                  key={`${sale.shop}-${sale.fruit}-${sale.date}-${index}`}
+                  key={sale.id}
                   className="hover:bg-[#FAFBF7]"
                 >
                   <td className="whitespace-nowrap px-5 py-4 font-semibold text-[#27382D]">
@@ -184,19 +145,19 @@ export default function DailySalesPage() {
                     {sale.boxes}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-[#758276]">
-                    ₹{sale.price.toLocaleString('en-IN')}
+                    ₹{formatNumber(sale.price)}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 font-semibold text-[#173D2B]">
-                    ₹{sale.total.toLocaleString('en-IN')}
+                    ₹{formatNumber(sale.total)}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-[#758276]">
-                    {sale.date}
+                    {formatDate(sale.date)}
                   </td>
                 </tr>
               ))}
 
               {/* Show a message if no sales exist */}
-              {sales.length === 0 && (
+              {!loading && !error && sales.length === 0 && (
                 <tr>
                   <td
                     colSpan={6}
@@ -211,8 +172,8 @@ export default function DailySalesPage() {
         </div>
 
         <p className="border-t border-[#E4E8DD] bg-[#FAFBF7] px-5 py-3 text-xs leading-5 text-[#758276]">
-          Sales are currently stored in page memory. Automatic stock deductions,
-          customer balance updates, and database saving will be added later.
+          Sales are loaded from and saved to the server. Stock and customer
+          balances are maintained by the backend.
         </p>
       </section>
 
@@ -233,6 +194,7 @@ export default function DailySalesPage() {
             aria-labelledby="add-sale-form-title"
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
           >
+            {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
             <AddSaleForm
               onCancel={() => setIsFormOpen(false)}
               onSubmit={handleAddSale}

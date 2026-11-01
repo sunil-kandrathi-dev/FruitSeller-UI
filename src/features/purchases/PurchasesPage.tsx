@@ -1,43 +1,16 @@
 import { useState } from 'react'
 import AddPurchaseForm from './AddPurchaseForm'
+import { purchasesApi } from './api/purchasesApi'
+import type { PurchaseCreate } from './api/types'
+import { useApiCollection } from '../../data/hooks/useApiCollection'
+import ApiStatus from '../../components/ApiStatus'
+import { formatNumber } from '../../data/formatNumber'
 
-// Step 1: Define the structure of a purchase record
-type Purchase = {
-  fruit: string
-  supplier: string
-  boxes: number
-  total: number
-  date: string
-}
-
-// Step 2: Keep the existing sample purchases
-const initialPurchases: Purchase[] = [
-  {
-    fruit: 'Pomegranate',
-    supplier: 'Sample Supplier A',
-    boxes: 25,
-    total: 12500,
-    date: '24 Oct 2026',
-  },
-  {
-    fruit: 'Green grapes',
-    supplier: 'Sample Supplier B',
-    boxes: 18,
-    total: 9000,
-    date: '23 Oct 2026',
-  },
-  {
-    fruit: 'Apple',
-    supplier: 'Sample Supplier A',
-    boxes: 12,
-    total: 8400,
-    date: '23 Oct 2026',
-  },
-]
-
-// Step 3: Format a date for display
-const formatDate = (date: string) => {
-  const [year, month, day] = date.split('-')
+// Format API-style dates for display
+const formatDate = (date: unknown) => {
+  if (typeof date !== 'string' || date.length < 10) return '—'
+  const [year, month, day] = date.slice(0, 10).split('-')
+  if (!year || !month || !day) return '—'
 
   return `${day} ${new Date(
     Number(year),
@@ -47,9 +20,7 @@ const formatDate = (date: string) => {
 
 // Step 4: Purchases page
 export default function PurchasesPage() {
-  // Store purchases so new records appear immediately
-  const [purchases, setPurchases] =
-    useState<Purchase[]>(initialPurchases)
+  const { records: purchases, loading, error, reload, create } = useApiCollection(purchasesApi)
 
   // Control whether the Add Purchase popup is visible
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -67,22 +38,12 @@ export default function PurchasesPage() {
   )
 
   // Add a new purchase to the top of the history
-  const handleAddPurchase = (newPurchase: {
-    fruit: string
-    supplier: string
-    boxes: number
-    total: number
-    date: string
-  }) => {
-    const purchase: Purchase = {
-      ...newPurchase,
-      date: formatDate(newPurchase.date),
+  const handleAddPurchase = async (newPurchase: PurchaseCreate) => {
+    try {
+      await create(newPurchase)
+    } catch {
+      return
     }
-
-    setPurchases((currentPurchases) => [
-      purchase,
-      ...currentPurchases,
-    ])
 
     // Close the popup after saving
     setIsFormOpen(false)
@@ -103,12 +64,14 @@ export default function PurchasesPage() {
         </p>
       </section>
 
+      <ApiStatus loading={loading} error={error} onRetry={() => void reload()} />
+
       {/* Step 6: Dynamic purchase summary cards */}
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-[#E4E8DD] bg-white p-5">
           <p className="text-sm text-[#758276]">Boxes purchased</p>
           <p className="mt-3 text-3xl font-bold text-[#173D2B]">
-            {totalBoxes.toLocaleString('en-IN')}
+            {formatNumber(totalBoxes)}
           </p>
           <p className="mt-2 text-xs text-[#899388]">
             Across all recorded purchases
@@ -118,7 +81,7 @@ export default function PurchasesPage() {
         <div className="rounded-2xl border border-[#E4E8DD] bg-white p-5">
           <p className="text-sm text-[#758276]">Total purchase cost</p>
           <p className="mt-3 text-3xl font-bold text-[#173D2B]">
-            ₹{totalCost.toLocaleString('en-IN')}
+            ₹{formatNumber(totalCost)}
           </p>
           <p className="mt-2 text-xs text-[#899388]">
             Across all recorded purchases
@@ -159,9 +122,9 @@ export default function PurchasesPage() {
             </thead>
 
             <tbody className="divide-y divide-[#EDF0E9]">
-              {purchases.map((purchase, index) => (
+              {purchases.map((purchase) => (
                 <tr
-                  key={`${purchase.fruit}-${purchase.supplier}-${purchase.date}-${index}`}
+                  key={purchase.id}
                   className="hover:bg-[#FAFBF7]"
                 >
                   <td className="whitespace-nowrap px-4 py-4 font-semibold text-[#27382D]">
@@ -174,16 +137,16 @@ export default function PurchasesPage() {
                     {purchase.boxes}
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 font-semibold text-[#173D2B]">
-                    ₹{purchase.total.toLocaleString('en-IN')}
+                    ₹{formatNumber(purchase.total)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-4 text-[#758276]">
-                    {purchase.date}
+                    {formatDate(purchase.date)}
                   </td>
                 </tr>
               ))}
 
               {/* Show a message if there are no purchases */}
-              {purchases.length === 0 && (
+              {!loading && !error && purchases.length === 0 && (
                 <tr>
                   <td
                     colSpan={5}
@@ -198,8 +161,7 @@ export default function PurchasesPage() {
         </div>
 
         <p className="mt-4 rounded-xl bg-[#F6F7F2] p-3 text-xs leading-5 text-[#758276]">
-          Purchase records are currently held in page memory. Database
-          saving and automatic stock updates will be implemented later.
+          Purchase records are loaded from and saved to the server.
         </p>
       </section>
 
@@ -220,6 +182,7 @@ export default function PurchasesPage() {
             aria-labelledby="add-purchase-form-title"
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
           >
+            {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
             <AddPurchaseForm
               onCancel={() => setIsFormOpen(false)}
               onSubmit={handleAddPurchase}

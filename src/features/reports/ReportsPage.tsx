@@ -1,29 +1,7 @@
-import { useMemo, useState } from 'react'
-
-// Sample report data until the backend is connected
-const salesData = [
-  { date: '2026-10-24', shop: 'Sri Lakshmi Fruits', fruit: 'Pomegranate', boxes: 5, amount: 3000 },
-  { date: '2026-10-24', shop: 'Fresh Fruit Centre', fruit: 'Green grapes', boxes: 4, amount: 2000 },
-  { date: '2026-10-23', shop: 'Sai Fruit Shop', fruit: 'Apple', boxes: 3, amount: 2100 },
-]
-
-const purchaseData = [
-  { date: '2026-10-24', fruit: 'Pomegranate', boxes: 25, amount: 12500 },
-  { date: '2026-10-23', fruit: 'Green grapes', boxes: 18, amount: 9000 },
-  { date: '2026-10-23', fruit: 'Apple', boxes: 12, amount: 8400 },
-]
-
-const expenseData = [
-  { date: '2026-10-24', category: 'Transportation', amount: 800 },
-  { date: '2026-10-23', category: 'Packaging', amount: 500 },
-  { date: '2026-10-22', category: 'Other', amount: 300 },
-]
-
-const paymentData = [
-  { date: '2026-10-24', customer: 'Sri Lakshmi Fruits', method: 'Cash', amount: 2000 },
-  { date: '2026-10-24', customer: 'Fresh Fruit Centre', method: 'UPI', amount: 3000 },
-  { date: '2026-10-23', customer: 'Sai Fruit Shop', method: 'Cash', amount: 1500 },
-]
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { reportsApi } from './api/reportsApi'
+import type { ReportsData } from './api/types'
+import ApiStatus from '../../components/ApiStatus'
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-IN', {
@@ -32,8 +10,10 @@ const formatCurrency = (amount: number) =>
     maximumFractionDigits: 2,
   }).format(amount)
 
-const formatDate = (date: string) => {
-  const [year, month, day] = date.split('-').map(Number)
+const formatDate = (date: unknown) => {
+  if (typeof date !== 'string' || date.length < 10) return '—'
+  const [year, month, day] = date.slice(0, 10).split('-').map(Number)
+  if (!year || !month || !day) return '—'
   return new Date(year, month - 1, day).toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -52,9 +32,36 @@ const getToday = () => {
 type ReportPeriod = 'today' | '7days' | 'month' | 'all' | 'custom'
 
 export default function ReportsPage() {
+  const [reportsData, setReportsData] = useState<ReportsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [period, setPeriod] = useState<ReportPeriod>('month')
-  const [startDate, setStartDate] = useState('2026-10-01')
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date()
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+  })
   const [endDate, setEndDate] = useState(getToday())
+
+  const loadReports = useCallback((signal?: AbortSignal) => {
+    void reportsApi.get(signal)
+      .then((data) => {
+        setReportsData(data)
+        setError('')
+      })
+      .catch((requestError: unknown) => {
+        if (signal?.aborted) return
+        setError(requestError instanceof Error ? requestError.message : 'Unable to load report data.')
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false)
+      })
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    loadReports(controller.signal)
+    return () => controller.abort()
+  }, [loadReports])
 
   // Calculate the selected date range
   const dateRange = useMemo(() => {
@@ -90,14 +97,17 @@ export default function ReportsPage() {
   }, [period, startDate, endDate])
 
   // Filter each report using the selected date range
-  const inRange = (date: string) =>
-    (!dateRange.start || date >= dateRange.start) &&
-    (!dateRange.end || date <= dateRange.end)
+  const inRange = (date: string) => {
+    if (typeof date !== 'string' || date.length < 10) return false
+    const dateOnly = date.slice(0, 10)
+    return (!dateRange.start || dateOnly >= dateRange.start) &&
+      (!dateRange.end || dateOnly <= dateRange.end)
+  }
 
-  const sales = salesData.filter((item) => inRange(item.date))
-  const purchases = purchaseData.filter((item) => inRange(item.date))
-  const expenses = expenseData.filter((item) => inRange(item.date))
-  const payments = paymentData.filter((item) => inRange(item.date))
+  const sales = (reportsData?.sales ?? []).filter((item) => inRange(item.date))
+  const purchases = (reportsData?.purchases ?? []).filter((item) => inRange(item.date))
+  const expenses = (reportsData?.expenses ?? []).filter((item) => inRange(item.date))
+  const payments = (reportsData?.payments ?? []).filter((item) => inRange(item.date))
 
   const totalSales = sales.reduce((sum, item) => sum + item.amount, 0)
   const totalPurchaseCost = purchases.reduce((sum, item) => sum + item.amount, 0)
@@ -152,11 +162,10 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      {/* Sample-data notice */}
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <strong>Preview mode:</strong> These reports use illustrative sample
-        data. They are not yet connected to your other pages or database.
-      </div>
+      <ApiStatus loading={loading} error={error} onRetry={() => {
+        setLoading(true)
+        loadReports()
+      }} />
 
       {/* Date range filters */}
       <section className="rounded-2xl border border-gray-200 bg-white p-5">

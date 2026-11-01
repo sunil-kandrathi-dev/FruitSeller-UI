@@ -1,0 +1,7 @@
+{
+  "quickActions": [
+    { "title": "Record a sale", "description": "Distribute fruit to a shop", "symbol": "↗" },
+    { "title": "Add a purchase", "description": "Record incoming stock", "symbol": "+" },
+    { "title": "Receive payment", "description": "Update customer balance", "symbol": "₹" }
+  ]
+}

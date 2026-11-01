@@ -1,40 +1,10 @@
 
 import { useState } from 'react'
 import AddExpenseForm from './AddExpenseForm'
-
-// Step 1: Define the structure of an expense record
-type Expense = {
-  id: number
-  category: string
-  description: string
-  date: string
-  amount: number
-}
-
-// Step 2: Sample expenses for UI development
-const initialExpenses: Expense[] = [
-  {
-    id: 1,
-    category: 'Transport',
-    description: 'Fruit delivery vehicle',
-    date: '24 Oct 2026',
-    amount: 500,
-  },
-  {
-    id: 2,
-    category: 'Packaging',
-    description: 'Fruit boxes and bags',
-    date: '24 Oct 2026',
-    amount: 350,
-  },
-  {
-    id: 3,
-    category: 'Loading and unloading',
-    description: 'Market labour charges',
-    date: '23 Oct 2026',
-    amount: 600,
-  },
-]
+import { expensesApi } from './api/expensesApi'
+import type { ExpenseCreate } from './api/types'
+import { useApiCollection } from '../../data/hooks/useApiCollection'
+import ApiStatus from '../../components/ApiStatus'
 
 // Step 3: Format amounts as Indian currency
 const formatCurrency = (amount: number) =>
@@ -48,7 +18,7 @@ const formatCurrency = (amount: number) =>
 const formatDate = (date: string) => {
   if (!date) return ''
 
-  const [year, month, day] = date.split('-')
+  const [year, month, day] = date.slice(0, 10).split('-')
   return `${day} ${new Date(Number(year), Number(month) - 1).toLocaleString(
     'en-IN',
     { month: 'short' },
@@ -57,8 +27,7 @@ const formatDate = (date: string) => {
 
 // Step 5: Main Expenses page
 export default function ExpensesPage() {
-  // Store expenses and allow new expenses to be added
-  const [expenses, setExpenses] = useState<Expense[]>(initialExpenses)
+  const { records: expenses, loading, error, reload, create } = useApiCollection(expensesApi)
 
   // Control whether the Add Expense popup is visible
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -69,8 +38,7 @@ export default function ExpensesPage() {
   // Calculate today's expenses using the actual current date
   const expensesToday = expenses
     .filter((expense) => {
-      // Support both the sample date and newly entered dates
-      return expense.date === formatDate(today) || expense.date === today
+      return typeof expense.date === 'string' && expense.date.slice(0, 10) === today
     })
     .reduce((total, expense) => total + expense.amount, 0)
 
@@ -81,21 +49,12 @@ export default function ExpensesPage() {
   )
 
   // Add the new expense to the top of the list
-  const handleAddExpense = (newExpense: {
-    category: string
-    description: string
-    date: string
-    amount: number
-  }) => {
-    const expense: Expense = {
-      id: Date.now(),
-      category: newExpense.category,
-      description: newExpense.description || '-',
-      date: formatDate(newExpense.date),
-      amount: newExpense.amount,
+  const handleAddExpense = async (newExpense: ExpenseCreate) => {
+    try {
+      await create({ ...newExpense, description: newExpense.description || '-' })
+    } catch {
+      return
     }
-
-    setExpenses((currentExpenses) => [expense, ...currentExpenses])
     setIsFormOpen(false)
   }
 
@@ -119,6 +78,8 @@ export default function ExpensesPage() {
           + Add Expense
         </button>
       </div>
+
+      <ApiStatus loading={loading} error={error} onRetry={() => void reload()} />
 
       {/* Step 7: Summary cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -148,7 +109,9 @@ export default function ExpensesPage() {
           </p>
         </div>
 
-        {expenses.length === 0 ? (
+        {loading ? (
+          <div className="p-8 text-center text-sm text-gray-500">Loading expenses…</div>
+        ) : error ? null : expenses.length === 0 ? (
           <div className="p-8 text-center text-sm text-gray-500">
             No expenses recorded yet. Click + Add Expense to get started.
           </div>
@@ -169,7 +132,7 @@ export default function ExpensesPage() {
                 {expenses.map((expense) => (
                   <tr key={expense.id}>
                     <td className="whitespace-nowrap px-5 py-4 text-gray-600">
-                      {expense.date}
+                      {formatDate(expense.date)}
                     </td>
                     <td className="px-5 py-4 font-medium text-gray-800">
                       {expense.category}
@@ -205,6 +168,7 @@ export default function ExpensesPage() {
             aria-labelledby="expense-form-title"
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
           >
+            {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
             <AddExpenseForm
               onCancel={() => setIsFormOpen(false)}
               onSubmit={handleAddExpense}
@@ -215,8 +179,7 @@ export default function ExpensesPage() {
 
       {/* Step 10: Explain that data is not saved permanently yet */}
       <p className="text-xs text-gray-500">
-        Sample data only. New expenses are held in memory and will reset when
-        the page is refreshed. Database saving will be added later.
+        Expenses are loaded from and saved to the server.
       </p>
     </div>
   )
