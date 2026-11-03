@@ -1,57 +1,28 @@
 
 import { useState } from 'react'
 import AddShopForm from './AddShopForm'
-
-// Step 1: Define the structure of a shop
-type Shop = {
-  name: string
-  owner: string
-  phone: string
-  balance: number
-}
-
-// Step 2: Keep the existing sample shops
-const initialShops: Shop[] = [
-  {
-    name: 'Sri Lakshmi Fruits',
-    owner: 'Ramesh',
-    phone: '98765 43210',
-    balance: 8500,
-  },
-  {
-    name: 'Fresh Fruit Centre',
-    owner: 'Suresh',
-    phone: '98765 12340',
-    balance: 4200,
-  },
-  {
-    name: 'Sai Fruit Shop',
-    owner: 'Ravi',
-    phone: '98765 67890',
-    balance: 0,
-  },
-]
+import { shopsApi } from './api/shopsApi'
+import type { ShopCreate } from './api/types'
+import { useApiCollection } from '../../data/hooks/useApiCollection'
+import ApiStatus from '../../components/ApiStatus'
+import { formatNumber } from '../../data/formatNumber'
 
 // Step 3: Customers page
 export default function CustomersPage() {
-  // Store shops in React state so new shops appear immediately
-  const [shops, setShops] = useState<Shop[]>(initialShops)
+  const { records: shops, loading, error, reload, create } = useApiCollection(shopsApi)
 
   // Control whether the Add Shop popup is visible
   const [isFormOpen, setIsFormOpen] = useState(false)
 
   // Calculate the combined outstanding balance
+  const hasUnknownBalances = shops.some((shop) => shop.balance === null)
   const totalBalance = shops.reduce(
-    (sum, shop) => sum + shop.balance,
+    (sum, shop) => sum + (shop.balance ?? 0),
     0,
   )
 
   // Add a new shop to the list
-  const handleAddShop = (newShop: {
-    name: string
-    owner: string
-    phone: string
-  }) => {
+  const handleAddShop = async (newShop: ShopCreate) => {
     // Prevent duplicate shop names, ignoring letter case
     const alreadyExists = shops.some(
       (shop) => shop.name.toLowerCase() === newShop.name.toLowerCase(),
@@ -63,14 +34,11 @@ export default function CustomersPage() {
     }
 
     // New shops start with no outstanding balance
-    const shop: Shop = {
-      ...newShop,
-      phone: `${newShop.phone.slice(0, 5)} ${newShop.phone.slice(5)}`,
-      balance: 0,
+    try {
+      await create(newShop)
+    } catch {
+      return
     }
-
-    // Add the new shop to the top of the table
-    setShops((currentShops) => [shop, ...currentShops])
 
     // Close the popup after saving
     setIsFormOpen(false)
@@ -91,6 +59,8 @@ export default function CustomersPage() {
         </p>
       </section>
 
+      <ApiStatus loading={loading} error={error} onRetry={() => void reload()} />
+
       {/* Step 5: Summary cards update automatically */}
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-[#E4E8DD] bg-white p-5">
@@ -106,7 +76,7 @@ export default function CustomersPage() {
         <div className="rounded-2xl border border-[#E4E8DD] bg-white p-5">
           <p className="text-sm text-[#758276]">Money shops still owe</p>
           <p className="mt-3 text-3xl font-bold text-[#173D2B]">
-            ₹{totalBalance.toLocaleString('en-IN')}
+            {hasUnknownBalances ? 'Some shop balances unavailable' : `₹${formatNumber(totalBalance)}`}
           </p>
           <p className="mt-2 text-xs text-[#899388]">
             Combined outstanding balance
@@ -148,7 +118,7 @@ export default function CustomersPage() {
 
             <tbody className="divide-y divide-[#EDF0E9]">
               {shops.map((shop) => (
-                <tr key={shop.name} className="hover:bg-[#FAFBF7]">
+                <tr key={shop.id} className="hover:bg-[#FAFBF7]">
                   <td className="whitespace-nowrap px-5 py-4 font-semibold text-[#27382D]">
                     {shop.name}
                   </td>
@@ -156,20 +126,22 @@ export default function CustomersPage() {
                     {shop.owner}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-[#758276]">
-                    {shop.phone}
+                    {shop.phone.replace(/^(\d{5})(\d{5})$/, '$1 $2')}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 font-semibold text-[#173D2B]">
-                    ₹{shop.balance.toLocaleString('en-IN')}
+                    {shop.balance === null ? '—' : `₹${formatNumber(shop.balance)}`}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4">
                     <span
                       className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                        shop.balance > 0
+                        shop.balance === null
+                          ? 'bg-gray-100 text-gray-700'
+                          : shop.balance > 0
                           ? 'bg-amber-100 text-amber-800'
                           : 'bg-emerald-100 text-emerald-800'
                       }`}
                     >
-                      {shop.balance > 0 ? 'Payment pending' : 'All paid'}
+                      {shop.balance === null ? 'Balance unavailable' : shop.balance > 0 ? 'Payment pending' : 'All paid'}
                     </span>
                   </td>
                 </tr>
@@ -179,8 +151,7 @@ export default function CustomersPage() {
         </div>
 
         <p className="border-t border-[#E4E8DD] bg-[#FAFBF7] px-5 py-3 text-xs leading-5 text-[#758276]">
-          Shop details are currently stored in page memory and are not saved
-          permanently.
+          Shop records and balances are loaded from the server.
         </p>
       </section>
 
@@ -201,6 +172,7 @@ export default function CustomersPage() {
             aria-labelledby="add-shop-form-title"
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
           >
+            {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
             <AddShopForm
               onCancel={() => setIsFormOpen(false)}
               onSubmit={handleAddShop}

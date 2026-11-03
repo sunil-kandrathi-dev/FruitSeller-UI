@@ -1,49 +1,74 @@
 
-const summaryCards = [
-  {
-    label: "Today's sales",
-    value: '₹0',
-    description: 'Sales recorded today',
-    symbol: '↗',
-    accent: 'bg-[#E6F3D7]',
-  },
-  {
-    label: 'Boxes distributed',
-    value: '0',
-    description: 'Across all customer shops',
-    symbol: '▦',
-    accent: 'bg-[#FCE8D5]',
-  },
-  {
-    label: 'Collections',
-    value: '₹0',
-    description: 'Payments received today',
-    symbol: '₹',
-    accent: 'bg-[#DCEBE8]',
-  },
-  {
-    label: 'Outstanding',
-    value: '₹0',
-    description: 'Pending customer balances',
-    symbol: '◷',
-    accent: 'bg-[#F5E2E0]',
-  },
-]
+import { useEffect, useState } from 'react'
+import { dashboardApi } from './api/dashboardApi'
+import type { DashboardSummary } from './api/types'
+import dashboardContent from './data/dashboardContent.json'
 
-const fruitStock = [
-  { name: 'Pomegranate', variety: 'Premium grade', boxes: 24, color: 'bg-red-100', symbol: '●' },
-  { name: 'Green grapes', variety: 'Fresh harvest', boxes: 18, color: 'bg-lime-100', symbol: '●' },
-  { name: 'Apple', variety: 'Kashmir', boxes: 32, color: 'bg-rose-100', symbol: '●' },
-  { name: 'Guava', variety: 'Local harvest', boxes: 12, color: 'bg-emerald-100', symbol: '●' },
-]
-
-const quickActions = [
-  { title: 'Record a sale', description: 'Distribute fruit to a shop', symbol: '↗' },
-  { title: 'Add a purchase', description: 'Record incoming stock', symbol: '+' },
-  { title: 'Receive payment', description: 'Update customer balance', symbol: '₹' },
-]
+const { quickActions } = dashboardContent
+const numberFormat = new Intl.NumberFormat('en-IN')
+const currencyFormat = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 0,
+})
+const stockColors = ['bg-red-100', 'bg-lime-100', 'bg-rose-100', 'bg-emerald-100']
 
 export default function DashboardPage() {
+  const [dashboard, setDashboard] = useState<DashboardSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    dashboardApi
+      .get(controller.signal)
+      .then((data) => {
+        setDashboard(data)
+        setError('')
+      })
+      .catch((requestError: unknown) => {
+        if (controller.signal.aborted) return
+        setError(requestError instanceof Error ? requestError.message : 'Unable to load dashboard data.')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [])
+
+  const summaryCards = [
+    {
+      label: "Today's sales",
+      value: dashboard ? currencyFormat.format(dashboard.todaySalesTotal) : '—',
+      description: 'Sales recorded today',
+      symbol: '↗',
+      accent: 'bg-[#E6F3D7]',
+    },
+    {
+      label: 'Boxes distributed',
+      value: dashboard ? numberFormat.format(dashboard.todayBoxesDistributed) : '—',
+      description: 'Across all customer shops',
+      symbol: '▦',
+      accent: 'bg-[#FCE8D5]',
+    },
+    {
+      label: 'Collections',
+      value: dashboard ? currencyFormat.format(dashboard.todayPaymentCollections) : '—',
+      description: 'Payments received today',
+      symbol: '₹',
+      accent: 'bg-[#DCEBE8]',
+    },
+    {
+      label: 'Outstanding',
+      value: dashboard ? currencyFormat.format(dashboard.totalOutstandingBalance) : '—',
+      description: 'Pending customer balances',
+      symbol: '◷',
+      accent: 'bg-[#F5E2E0]',
+    },
+  ]
+
   return (
     <div className="space-y-6">
       <section className="relative overflow-hidden rounded-3xl bg-[#173D2B] p-6 text-white md:p-8">
@@ -79,9 +104,15 @@ export default function DashboardPage() {
             </p>
           </div>
           <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-[#758276] ring-1 ring-[#E4E8DD]">
-            Sample data
+            {loading ? 'Loading…' : error ? 'Unavailable' : 'Live data'}
           </span>
         </div>
+
+        {error && (
+          <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            Could not load dashboard data: {error}
+          </p>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {summaryCards.map((card) => (
@@ -114,34 +145,39 @@ export default function DashboardPage() {
               </p>
             </div>
             <span className="rounded-lg bg-[#EAF2E3] px-3 py-2 text-xs font-semibold text-[#28563A]">
-              4 fruits
+              {loading ? '…' : `${dashboard?.currentStockByFruit.length ?? 0} fruits`}
             </span>
           </div>
 
           <div className="mt-5 divide-y divide-[#EDF0E9]">
-            {fruitStock.map((fruit) => (
-              <div key={fruit.name} className="flex items-center gap-3 py-4">
-                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${fruit.color}`}>
-                  <span className="text-xl text-[#28563A]">{fruit.symbol}</span>
+            {(dashboard?.currentStockByFruit ?? []).map((fruit, index) => (
+              <div key={fruit.fruitId} className="flex items-center gap-3 py-4">
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${stockColors[index % stockColors.length]}`}>
+                  <span className="text-xl text-[#28563A]">●</span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-[#27382D]">
-                    {fruit.name}
+                    {fruit.fruitName}
                   </p>
-                  <p className="mt-1 text-xs text-[#899388]">{fruit.variety}</p>
+                  <p className="mt-1 text-xs text-[#899388]">Current stock</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-[#173D2B]">{fruit.boxes}</p>
+                  <p className="font-bold text-[#173D2B]">{numberFormat.format(fruit.currentStock)}</p>
                   <p className="text-xs text-[#899388]">boxes</p>
                 </div>
               </div>
             ))}
           </div>
 
-          <p className="mt-3 rounded-xl bg-[#F6F7F2] p-3 text-xs leading-5 text-[#758276]">
-            Illustrative inventory only. Actual stock will come from purchase
-            and distribution records when we connect the backend.
-          </p>
+          {loading && <p className="mt-5 text-sm text-[#758276]">Loading stock…</p>}
+          {!loading && error && (
+            <p className="mt-5 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+              Stock could not be loaded. Check the API connection above.
+            </p>
+          )}
+          {!loading && !error && dashboard?.currentStockByFruit.length === 0 && (
+            <p className="mt-5 text-sm text-[#758276]">No current stock records.</p>
+          )}
         </div>
 
         <div className="rounded-2xl border border-[#E4E8DD] bg-white p-5 md:p-6">

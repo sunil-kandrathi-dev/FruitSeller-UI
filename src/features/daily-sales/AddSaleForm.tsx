@@ -155,6 +155,7 @@ export default function AddSaleForm({
         <input
           id="sale-boxes"
           type="number"
+          onWheel={(event) => event.currentTarget.blur()}
           min="1"
           step="1"
           value={boxes}
@@ -174,22 +175,26 @@ export default function AddSaleForm({
           htmlFor="sale-price"
           className="mb-2 block text-sm font-medium text-[#27382D]"
         >
-          Price per box (₹)
+          Price per box
         </label>
-        <input
-          id="sale-price"
-          type="number"
-          min="0.01"
-          step="0.01"
-          value={price}
-          onChange={(event) => {
-            setPrice(event.target.value)
-            setError('')
-          }}
-          placeholder="Enter selling price"
-          required
-          className="w-full rounded-xl border border-[#D9DFD3] px-4 py-3 outline-none focus:border-[#173D2B]"
-        />
+        <div className="relative">
+          <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-[#758276]">₹</span>
+          <input
+            id="sale-price"
+            type="number"
+            onWheel={(event) => event.currentTarget.blur()}
+            min="0.01"
+            step="0.01"
+            value={price}
+            onChange={(event) => {
+              setPrice(event.target.value)
+              setError('')
+            }}
+            placeholder="Enter selling price"
+            required
+            className="currency-input w-full rounded-xl border border-[#D9DFD3] py-3 pl-9 pr-4 outline-none focus:border-[#173D2B]"
+          />
+        </div>
       </div>
 
       {/* Step 9: Display the calculated total */}

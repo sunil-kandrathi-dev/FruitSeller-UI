@@ -1,26 +1,13 @@
 
 import { useState } from 'react'
 import AddFruitForm from './AddFruitForm'
-
-// Step 1: Define the structure of a fruit stock record
-type Fruit = {
-  name: string
-  variety: string
-  boxes: number
-}
-
-// Step 2: Keep the existing sample fruits
-const initialFruits: Fruit[] = [
-  { name: 'Pomegranate', variety: 'Premium', boxes: 25 },
-  { name: 'Green grapes', variety: 'Fresh harvest', boxes: 18 },
-  { name: 'Apple', variety: 'Kashmir', boxes: 12 },
-  { name: 'Guava', variety: 'Local harvest', boxes: 30 },
-]
+import { fruitsApi } from './api/fruitsApi'
+import { useApiCollection } from '../../data/hooks/useApiCollection'
+import ApiStatus from '../../components/ApiStatus'
 
 // Step 3: Fruit Stock page
 export default function FruitStockPage() {
-  // Store fruit records so newly added fruits appear immediately
-  const [fruits, setFruits] = useState<Fruit[]>(initialFruits)
+  const { records: fruits, loading, error, reload, create } = useApiCollection(fruitsApi)
 
   // Store the text entered in the search box
   const [searchTerm, setSearchTerm] = useState('')
@@ -43,7 +30,7 @@ export default function FruitStockPage() {
   const totalBoxes = fruits.reduce((sum, fruit) => sum + fruit.boxes, 0)
 
   // Add a new fruit to the stock list
-  const handleAddFruit = (newFruit: Fruit) => {
+  const handleAddFruit = async (newFruit: { name: string; variety: string; boxes: number }) => {
     // Prevent duplicate fruit names, ignoring letter case
     const alreadyExists = fruits.some(
       (fruit) => fruit.name.toLowerCase() === newFruit.name.toLowerCase(),
@@ -57,7 +44,11 @@ export default function FruitStockPage() {
     }
 
     // Add the new fruit to the top of the list
-    setFruits((currentFruits) => [newFruit, ...currentFruits])
+    try {
+      await create(newFruit)
+    } catch {
+      return
+    }
 
     // Close the popup after a successful save
     setIsFormOpen(false)
@@ -77,6 +68,8 @@ export default function FruitStockPage() {
           See how many boxes of fruit you have left.
         </p>
       </section>
+
+      <ApiStatus loading={loading} error={error} onRetry={() => void reload()} />
 
       {/* Step 5: Dynamic summary cards */}
       <section className="grid gap-4 sm:grid-cols-2">
@@ -146,7 +139,7 @@ export default function FruitStockPage() {
 
             <tbody className="divide-y divide-[#EDF0E9]">
               {filteredFruits.map((fruit) => (
-                <tr key={fruit.name} className="hover:bg-[#FAFBF7]">
+                <tr key={fruit.id} className="hover:bg-[#FAFBF7]">
                   <td className="whitespace-nowrap px-5 py-4 font-semibold text-[#27382D]">
                     {fruit.name}
                   </td>
@@ -171,7 +164,7 @@ export default function FruitStockPage() {
               ))}
 
               {/* Show a message when no fruits match the search */}
-              {filteredFruits.length === 0 && (
+              {!loading && !error && filteredFruits.length === 0 && (
                 <tr>
                   <td
                     colSpan={4}
@@ -186,9 +179,8 @@ export default function FruitStockPage() {
         </div>
 
         <p className="border-t border-[#E4E8DD] bg-[#FAFBF7] px-5 py-3 text-xs leading-5 text-[#758276]">
-          Example quantities only. Real stock will be calculated from
-          purchases, deliveries and approved stock changes after backend
-          integration.
+          Stock quantities are provided by the server and updated from recorded
+          purchases and sales.
         </p>
       </section>
 
@@ -209,6 +201,7 @@ export default function FruitStockPage() {
             aria-labelledby="add-fruit-form-title"
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
           >
+            {error && <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
             <AddFruitForm
               onCancel={() => setIsFormOpen(false)}
               onSubmit={handleAddFruit}

@@ -117,23 +117,27 @@ export default function AddExpenseForm({
           htmlFor="expense-amount"
           className="mb-2 block text-sm font-medium text-gray-700"
         >
-          Amount (₹)
+          Amount
         </label>
 
-        <input
-          id="expense-amount"
-          type="number"
-          min="0.01"
-          step="0.01"
-          value={amount}
-          onChange={(event) => {
-            setAmount(event.target.value)
-            setError('')
-          }}
-          placeholder="Enter amount"
-          required
-          className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-[#173D2B]"
-        />
+        <div className="relative">
+          <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-gray-500">₹</span>
+          <input
+            id="expense-amount"
+            type="number"
+            onWheel={(event) => event.currentTarget.blur()}
+            min="0.01"
+            step="0.01"
+            value={amount}
+            onChange={(event) => {
+              setAmount(event.target.value)
+              setError('')
+            }}
+            placeholder="Enter amount"
+            required
+            className="currency-input w-full rounded-xl border border-gray-300 py-3 pl-9 pr-4 outline-none focus:border-[#173D2B]"
+          />
+        </div>
       </div>
 
       {/* Step 8: Select the date of the expense */}
