@@ -1,6 +1,6 @@
 import { createResource } from '../../../data/api/createResource'
 import { asApiObject, readApiId, readApiNumber, readApiString } from '../../../data/api/normalize'
-import type { PaymentCreate, PaymentRecord } from './types'
+import type { PaymentCreate, PaymentCreateRequest, PaymentRecord } from './types'
 
 const normalizePayment = (value: unknown): PaymentRecord => {
   const record = asApiObject(value)
@@ -17,4 +17,15 @@ const normalizePayment = (value: unknown): PaymentRecord => {
   }
 }
 
-export const paymentsApi = createResource<PaymentRecord, PaymentCreate>('/payments', normalizePayment)
+const paymentResource = createResource<PaymentRecord, PaymentCreateRequest>('/payments', normalizePayment)
+
+export const paymentsApi = {
+  ...paymentResource,
+  create: (payment: PaymentCreate) =>
+    paymentResource.create({
+      customer: payment.customer,
+      date: payment.date,
+      method: payment.method,
+      amount: payment.amount,
+    }),
+}

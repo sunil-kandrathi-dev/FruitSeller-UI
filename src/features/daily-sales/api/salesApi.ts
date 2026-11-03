@@ -1,6 +1,6 @@
 import { createResource } from '../../../data/api/createResource'
 import { asApiObject, readApiId, readApiNumber, readApiString } from '../../../data/api/normalize'
-import type { SaleCreate, SaleRecord } from './types'
+import type { SaleCreate, SaleCreateRequest, SaleRecord } from './types'
 
 const normalizeSale = (value: unknown): SaleRecord => {
   const record = asApiObject(value)
@@ -19,4 +19,17 @@ const normalizeSale = (value: unknown): SaleRecord => {
   }
 }
 
-export const salesApi = createResource<SaleRecord, SaleCreate>('/sales', normalizeSale)
+const saleResource = createResource<SaleRecord, SaleCreateRequest>('/sales', normalizeSale)
+
+export const salesApi = {
+  ...saleResource,
+  create: (sale: SaleCreate) =>
+    saleResource.create({
+      shop: sale.shop,
+      fruit: sale.fruit,
+      boxes: sale.boxes,
+      price: sale.price,
+      total: sale.total,
+      date: sale.date,
+    }),
+}

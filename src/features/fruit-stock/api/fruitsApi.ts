@@ -1,6 +1,6 @@
 import { createResource } from '../../../data/api/createResource'
 import { asApiObject, readApiId, readApiNumber, readApiString, readApiValue } from '../../../data/api/normalize'
-import type { FruitCreate, FruitRecord } from './types'
+import type { FruitCreate, FruitCreateRequest, FruitRecord } from './types'
 
 const normalizeFruit = (value: unknown): FruitRecord => {
   const record = asApiObject(value)
@@ -15,4 +15,14 @@ const normalizeFruit = (value: unknown): FruitRecord => {
   }
 }
 
-export const fruitsApi = createResource<FruitRecord, FruitCreate>('/fruits', normalizeFruit)
+const fruitResource = createResource<FruitRecord, FruitCreateRequest>('/fruits', normalizeFruit)
+
+export const fruitsApi = {
+  ...fruitResource,
+  create: (fruit: FruitCreate) =>
+    fruitResource.create({
+      name: fruit.name,
+      variety: fruit.variety,
+      boxes: fruit.boxes,
+    }),
+}

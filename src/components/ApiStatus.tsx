@@ -12,7 +12,7 @@ export default function ApiStatus({ loading, error, onRetry }: ApiStatusProps) {
   if (error) {
     return (
       <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        <span>Could not load data: {error}</span>
+        <span>Request failed: {error}</span>
         <button type="button" onClick={onRetry} className="font-semibold underline">Try again</button>
       </div>
     )

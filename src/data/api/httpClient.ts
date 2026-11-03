@@ -11,6 +11,33 @@ export class ApiError extends Error {
   }
 }
 
+function getErrorMessage(responseBody: string, status: number): string {
+  if (!responseBody) return `Request failed (${status})`
+
+  try {
+    const body: unknown = JSON.parse(responseBody)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return responseBody
+
+    const problem = body as Record<string, unknown>
+    const validationErrors = problem.errors
+    if (validationErrors && typeof validationErrors === 'object' && !Array.isArray(validationErrors)) {
+      const messages = Object.values(validationErrors)
+        .flatMap((value) => Array.isArray(value) ? value : [value])
+        .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
+      if (messages.length > 0) return messages.join(' ')
+    }
+
+    for (const key of ['detail', 'message', 'title']) {
+      const message = problem[key]
+      if (typeof message === 'string' && message.trim() !== '') return message
+    }
+  } catch {
+    return responseBody
+  }
+
+  return responseBody
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
@@ -29,8 +56,8 @@ export async function apiRequest<T>(
   })
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new ApiError(message || `Request failed (${response.status})`, response.status)
+    const responseBody = await response.text()
+    throw new ApiError(getErrorMessage(responseBody, response.status), response.status)
   }
 
   if (response.status === 204) return undefined as T

@@ -140,24 +140,28 @@ export default function RecordPaymentForm({
           htmlFor="payment-amount"
           className="mb-2 block text-sm font-medium text-gray-700"
         >
-          Amount Received (₹)
+          Amount Received
         </label>
 
-        <input
-          id="payment-amount"
-          type="number"
-          min="0.01"
-          max={selectedCustomer?.balance}
-          step="0.01"
-          value={amount}
-          onChange={(event) => {
-            setAmount(event.target.value)
-            setError('')
-          }}
-          placeholder="Enter amount"
-          required
-          className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-[#173D2B]"
-        />
+        <div className="relative">
+          <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-gray-500">₹</span>
+          <input
+            id="payment-amount"
+            type="number"
+            onWheel={(event) => event.currentTarget.blur()}
+            min="0.01"
+            max={selectedCustomer?.balance}
+            step="0.01"
+            value={amount}
+            onChange={(event) => {
+              setAmount(event.target.value)
+              setError('')
+            }}
+            placeholder="Enter amount"
+            required
+            className="currency-input w-full rounded-xl border border-gray-300 py-3 pl-9 pr-4 outline-none focus:border-[#173D2B]"
+          />
+        </div>
 
         <p className="mt-1 text-xs text-gray-500">
           Partial payments are allowed.

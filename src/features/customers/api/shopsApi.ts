@@ -1,6 +1,6 @@
 import { createResource } from '../../../data/api/createResource'
 import { asApiObject, readApiId, readApiString, readOptionalApiNumber } from '../../../data/api/normalize'
-import type { ShopCreate, ShopRecord } from './types'
+import type { ShopCreate, ShopCreateRequest, ShopRecord } from './types'
 
 const normalizeShop = (value: unknown): ShopRecord => {
   const record = asApiObject(value)
@@ -18,4 +18,14 @@ const normalizeShop = (value: unknown): ShopRecord => {
   }
 }
 
-export const shopsApi = createResource<ShopRecord, ShopCreate>('/shops', normalizeShop)
+const shopResource = createResource<ShopRecord, ShopCreateRequest>('/shops', normalizeShop)
+
+export const shopsApi = {
+  ...shopResource,
+  create: (shop: ShopCreate) =>
+    shopResource.create({
+      name: shop.name,
+      owner: shop.owner,
+      phone: shop.phone,
+    }),
+}
